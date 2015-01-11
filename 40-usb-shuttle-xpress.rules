@@ -1,0 +1,3 @@
+# SUBSYSTEM=="hidraw", ATTR{idVendor}=="0b33", ATTR{idProduct}=="0020", MODE="0666"
+
+KERNEL=="hidraw*", SUBSYSTEM=="hidraw", MODE="0664", GROUP="plugdev"
