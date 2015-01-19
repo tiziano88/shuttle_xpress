@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"time"
 )
 
 type ReadValue struct {
@@ -31,7 +32,8 @@ const (
 )
 
 var (
-	mode = ModeScroll
+	mode      = ModeScroll
+	jog  int8 = 0
 )
 
 func ToReadValue(buf []byte) *ReadValue {
@@ -49,7 +51,7 @@ func ToReadValue(buf []byte) *ReadValue {
 }
 
 func findDevice() string {
-	return "/dev/hidraw4"
+	return "/dev/hidraw5"
 }
 
 func action(v *ReadValue) {
@@ -89,12 +91,7 @@ func action(v *ReadValue) {
 			exec.Command("xdotool", "key", "Shift+Tab").Run()
 		}
 	}
-	if v.Jog > 0 {
-		exec.Command("xdotool", "click", "5").Run()
-	}
-	if v.Jog < 0 {
-		exec.Command("xdotool", "click", "4").Run()
-	}
+	jog = v.Jog
 }
 
 func loop(c <-chan *ReadValue) {
@@ -106,6 +103,34 @@ func loop(c <-chan *ReadValue) {
 			action(v)
 			p = v
 		}
+	}
+}
+
+func jogLoop() {
+	t := time.NewTicker(10 * time.Millisecond)
+	i := 0
+	for _ = range t.C {
+		i++
+		thr := (1 << 4) - (1 << uint(abs(int(jog))))
+		if i > thr {
+			if jog > 0 {
+				log.Printf("tick %d %d/%d", jog, i, thr)
+				exec.Command("xdotool", "click", "5").Run()
+			}
+			if jog < 0 {
+				log.Printf("tick %d %d/%d", jog, i, thr)
+				exec.Command("xdotool", "click", "4").Run()
+			}
+			i = 0
+		}
+	}
+}
+
+func abs(x int) int {
+	if x >= 0 {
+		return x
+	} else {
+		return -x
 	}
 }
 
@@ -126,6 +151,8 @@ func generate(c chan<- *ReadValue) {
 
 func main() {
 	flag.Parse()
+
+	go jogLoop()
 
 	c := make(chan *ReadValue)
 	go generate(c)
