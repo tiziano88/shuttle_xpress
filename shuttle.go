@@ -10,8 +10,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/jteeuwen/evdev"
 	"log"
-	"os"
 	"os/exec"
 	"time"
 )
@@ -36,22 +36,8 @@ var (
 	jog  int8 = 0
 )
 
-func ToReadValue(buf []byte) *ReadValue {
-	b := [5]bool{}
-	b[0] = buf[3]&0x10 != 0
-	b[1] = buf[3]&0x20 != 0
-	b[2] = buf[3]&0x40 != 0
-	b[3] = buf[3]&0x80 != 0
-	b[4] = buf[4]&0x01 != 0
-	return &ReadValue{
-		Jog:     int8(buf[0]),
-		Wheel:   uint8(buf[1]),
-		Buttons: b,
-	}
-}
-
 func findDevice() string {
-	return "/dev/hidraw5"
+	return "/dev/input/by-id/usb-Contour_Design_ShuttleXpress-event-if00"
 }
 
 func action(v *ReadValue) {
@@ -135,17 +121,14 @@ func abs(x int) int {
 }
 
 func generate(c chan<- *ReadValue) {
-	f, err := os.Open(findDevice())
+	dev, err := evdev.Open(findDevice())
 	if err != nil {
-		log.Fatalf("invalid file name: %s", findDevice())
+		log.Fatalf("error opening device: %v", err)
 		return
 	}
 
-	buf := make([]byte, 5)
-	for {
-		f.Read(buf)
-		v := ToReadValue(buf)
-		c <- v
+	for evt := range dev.Inbox {
+		log.Printf("Input event: %#v", evt)
 	}
 }
 
