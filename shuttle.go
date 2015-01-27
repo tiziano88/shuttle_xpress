@@ -82,17 +82,19 @@ func action(v evdev.Event) {
 		case evdev.RelWheel:
 		}
 	case evdev.EvKeys:
-		switch v.Code {
-		case evdev.Btn4:
-			exec.Command("xdotool", "key", "Return").Run()
-		case evdev.Btn5:
-			currentState.Mode = ModeScroll
-		case evdev.Btn6:
-			currentState.Mode = ModeTab
-		case evdev.Btn7:
-			currentState.Mode = ModeSelect
-		case evdev.Btn8:
-			exec.Command("xdotool", "key", "Return").Run()
+		if v.Value != 0 {
+			switch v.Code {
+			case evdev.Btn4:
+				exec.Command("xdotool", "key", "Return").Run()
+			case evdev.Btn5:
+				currentState.Mode = ModeScroll
+			case evdev.Btn6:
+				currentState.Mode = ModeTab
+			case evdev.Btn7:
+				currentState.Mode = ModeSelect
+			case evdev.Btn8:
+				exec.Command("xdotool", "key", "Return").Run()
+			}
 		}
 	}
 }
