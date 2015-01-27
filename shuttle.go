@@ -9,13 +9,14 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os/exec"
 	"time"
 
 	"github.com/jteeuwen/evdev"
 )
+
+var device = flag.String("device", "/dev/input/by-id/usb-Contour_Design_ShuttleXpress-event-if00", "device to use")
 
 type ReadValue struct {
 	Jog        int8
@@ -45,12 +46,12 @@ var (
 )
 
 func findDevice() string {
-	return "/dev/input/by-id/usb-Contour_Design_ShuttleXpress-event-if00"
+	return *device
 }
 
 func action(v evdev.Event) {
-	fmt.Printf("val: %#v\n", v)
-	fmt.Printf("state: %#v\n", currentState)
+	log.Printf("val: %#v\n", v)
+	log.Printf("state: %#v\n", currentState)
 
 	switch v.Type {
 	case evdev.EvRelative:
