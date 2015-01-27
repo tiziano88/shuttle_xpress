@@ -10,10 +10,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/jteeuwen/evdev"
 	"log"
 	"os/exec"
 	"time"
+
+	"github.com/jteeuwen/evdev"
 )
 
 type ReadValue struct {
@@ -31,72 +32,87 @@ const (
 	ModeSelect
 )
 
+type State struct {
+	Mode Mode
+
+	Dial  int32
+	Wheel int32
+}
+
 var (
-	mode      = ModeScroll
-	jog  int8 = 0
+	currentState  = State{}
+	previousState = State{}
 )
 
 func findDevice() string {
 	return "/dev/input/by-id/usb-Contour_Design_ShuttleXpress-event-if00"
 }
 
-func action(v *ReadValue) {
+func action(v evdev.Event) {
 	fmt.Printf("val: %#v\n", v)
-	fmt.Printf("mode: %#v\n", mode)
+	fmt.Printf("state: %#v\n", currentState)
 
-	switch {
-	case v.Buttons[0]:
-		exec.Command("xdotool", "key", "Return").Run()
-	case v.Buttons[1]:
-		mode = ModeScroll
-	case v.Buttons[2]:
-		mode = ModeTab
-	case v.Buttons[3]:
-		mode = ModeSelect
-	case v.Buttons[4]:
-		exec.Command("xdotool", "key", "Return").Run()
-	}
-
-	if v.WheelDelta > 0 {
-		switch mode {
-		case ModeScroll:
-			exec.Command("xdotool", "click", "5").Run()
-		case ModeTab:
-			exec.Command("xdotool", "key", "Ctrl+Tab").Run()
-		case ModeSelect:
-			exec.Command("xdotool", "key", "Tab").Run()
+	switch v.Type {
+	case evdev.EvRelative:
+		switch v.Code {
+		case evdev.RelDial:
+			currentState.Dial = v.Value
+			var delta = currentState.Dial - previousState.Dial
+			if delta > 0 {
+				switch currentState.Mode {
+				case ModeScroll:
+					exec.Command("xdotool", "click", "5").Run()
+				case ModeTab:
+					exec.Command("xdotool", "key", "Ctrl+Tab").Run()
+				case ModeSelect:
+					exec.Command("xdotool", "key", "Tab").Run()
+				}
+			}
+			if delta < 0 {
+				switch currentState.Mode {
+				case ModeScroll:
+					exec.Command("xdotool", "click", "4").Run()
+				case ModeTab:
+					exec.Command("xdotool", "key", "Ctrl+Shift+Tab").Run()
+				case ModeSelect:
+					exec.Command("xdotool", "key", "Shift+Tab").Run()
+				}
+			}
+		case evdev.RelWheel:
+		}
+	case evdev.EvKeys:
+		switch v.Code {
+		case evdev.Btn4:
+			exec.Command("xdotool", "key", "Return").Run()
+		case evdev.Btn5:
+			currentState.Mode = ModeScroll
+		case evdev.Btn6:
+			currentState.Mode = ModeTab
+		case evdev.Btn7:
+			currentState.Mode = ModeSelect
+		case evdev.Btn8:
+			exec.Command("xdotool", "key", "Return").Run()
 		}
 	}
-	if v.WheelDelta < 0 {
-		switch mode {
-		case ModeScroll:
-			exec.Command("xdotool", "click", "4").Run()
-		case ModeTab:
-			exec.Command("xdotool", "key", "Ctrl+Shift+Tab").Run()
-		case ModeSelect:
-			exec.Command("xdotool", "key", "Shift+Tab").Run()
-		}
-	}
-	jog = v.Jog
 }
 
-func loop(c <-chan *ReadValue) {
-	p := <-c
+func loop(c <-chan evdev.Event) {
 	for {
 		select {
 		case v := <-c:
-			v.WheelDelta = int8(v.Wheel) - int8(p.Wheel)
 			action(v)
-			p = v
+			previousState = currentState
 		}
 	}
 }
 
 func jogLoop() {
+	return
 	t := time.NewTicker(10 * time.Millisecond)
 	i := 0
 	for _ = range t.C {
 		i++
+		jog := currentState.Dial
 		thr := (1 << 4) - (1 << uint(abs(int(jog))))
 		if i > thr {
 			if jog > 0 {
@@ -120,7 +136,7 @@ func abs(x int) int {
 	}
 }
 
-func generate(c chan<- *ReadValue) {
+func generate(c chan<- evdev.Event) {
 	dev, err := evdev.Open(findDevice())
 	if err != nil {
 		log.Fatalf("error opening device: %v", err)
@@ -129,6 +145,7 @@ func generate(c chan<- *ReadValue) {
 
 	for evt := range dev.Inbox {
 		log.Printf("Input event: %#v", evt)
+		c <- evt
 	}
 }
 
@@ -137,7 +154,7 @@ func main() {
 
 	go jogLoop()
 
-	c := make(chan *ReadValue)
+	c := make(chan evdev.Event)
 	go generate(c)
 	loop(c)
 
